@@ -513,7 +513,6 @@ rg4.Parent = scroll
 -------------------------------------------------
 -- Helpers for original sizes
 -------------------------------------------------
-
 local function recordOriginalHandle(tool)
 	if not tool or not tool:IsA("Tool") then return end
 	local handle = tool:FindFirstChild("Handle")
@@ -522,28 +521,33 @@ local function recordOriginalHandle(tool)
 	end
 end
 
-local function applyRangeMult(mult)
-	-- store originals then apply exact sizes (not cumulative)
-	for _,tool in pairs(player.Backpack:GetChildren()) do
-		recordOriginalHandle(tool)
-		local handle = tool:FindFirstChild("Handle")
-		if handle then
-			local orig = originalHandleSizes[tool] or handle.Size
-			handle.Size = orig * mult
-		end
-	end
+local reachMult = 1
 
-	for _,tool in pairs(player.Character and player.Character:GetChildren() or {}) do
+function applyRangeMult(mult)
+	reachMult = mult or 1
+
+	local char = player.Character
+	if not char then return end
+
+	for _,tool in pairs(char:GetChildren()) do
 		if tool:IsA("Tool") then
-			recordOriginalHandle(tool)
 			local handle = tool:FindFirstChild("Handle")
 			if handle then
-				local orig = originalHandleSizes[tool] or handle.Size
-				handle.Size = orig * mult
+				handle.Size = Vector3.new(1,1,1) * (reachMult * 4)
 			end
 		end
 	end
 end
+
+player.CharacterAdded:Connect(function(char)
+	char.ChildAdded:Connect(function(obj)
+		if obj:IsA("Tool") then
+			task.wait(0.1)
+			applyRangeMult(reachMult)
+		end
+	end)
+end)
+
 
 -------------------------------------------------
 -- PAGE SWITCH
