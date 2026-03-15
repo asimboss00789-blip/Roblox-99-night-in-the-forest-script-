@@ -1,5 +1,8 @@
+-- Full updated script: Fallen Code (complete)
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 -------------------------------------------------
@@ -9,6 +12,12 @@ local player = Players.LocalPlayer
 local playerESP=false
 local animalESP=false
 local chestESP=false
+
+local lightOn = false
+local infJumpEnabled = false
+
+local originalWalkSpeed = 16
+local originalHandleSizes = {} -- map tool -> Vector3
 
 -------------------------------------------------
 -- DROP ITEM
@@ -146,7 +155,13 @@ end
 -------------------------------------------------
 
 local function bringLogs()
-	bringByNames({"log"})
+
+	for _,v in pairs(workspace:GetDescendants()) do
+		if v.Name:lower()=="log" then
+			dropToPlayer(v)
+		end
+	end
+
 end
 
 local function bringMetal()
@@ -197,13 +212,23 @@ frame.BackgroundColor3=Color3.fromRGB(25,25,25)
 frame.Parent=gui
 
 -------------------------------------------------
--- TOP BAR
+-- TOP BAR (title here will not be hidden when minimized)
 -------------------------------------------------
 
 local top=Instance.new("Frame")
 top.Size=UDim2.new(1,0,0,30)
 top.BackgroundColor3=Color3.fromRGB(35,35,35)
 top.Parent=frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -90, 1, 0)
+title.Position = UDim2.new(0,10,0,0)
+title.BackgroundTransparency = 1
+title.Text = "Fallen Code"
+title.TextColor3 = Color3.fromRGB(160, 64, 255) -- purple
+title.TextScaled = true
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = top
 
 local close=Instance.new("TextButton")
 close.Size=UDim2.new(0,30,1,0)
@@ -222,7 +247,7 @@ close.MouseButton1Click:Connect(function()
 end)
 
 -------------------------------------------------
--- MINIMIZE FIX
+-- MINIMIZE
 -------------------------------------------------
 
 local minimized=false
@@ -287,14 +312,20 @@ bringBtn.Position=UDim2.new(0,10,0,120)
 bringBtn.Text="Bring"
 bringBtn.Parent=frame
 
+local attackBtn=Instance.new("TextButton")
+attackBtn.Size=UDim2.new(0,90,0,45)
+attackBtn.Position=UDim2.new(0,10,0,180)
+attackBtn.Text="Attack"
+attackBtn.Parent=frame
+
 -------------------------------------------------
--- SCROLL AREA
+-- SCROLL
 -------------------------------------------------
 
 local scroll=Instance.new("ScrollingFrame")
 scroll.Size=UDim2.new(0,300,0,210)
 scroll.Position=UDim2.new(0,120,0,50)
-scroll.CanvasSize=UDim2.new(0,0,0,500)
+scroll.CanvasSize=UDim2.new(0,0,0,600) -- tall enough for attack extras
 scroll.ScrollBarThickness=6
 scroll.BackgroundTransparency=1
 scroll.Parent=frame
@@ -312,6 +343,7 @@ minimize.MouseButton1Click:Connect(function()
 		frame.Size=UDim2.new(0,460,0,30)
 		homeBtn.Visible=false
 		bringBtn.Visible=false
+		attackBtn.Visible=false
 		scroll.Visible=false
 
 	else
@@ -319,6 +351,7 @@ minimize.MouseButton1Click:Connect(function()
 		frame.Size=UDim2.new(0,460,0,280)
 		homeBtn.Visible=true
 		bringBtn.Visible=true
+		attackBtn.Visible=true
 		scroll.Visible=true
 
 	end
@@ -401,8 +434,125 @@ foodBtn.Visible=false
 foodBtn.Parent=scroll
 
 -------------------------------------------------
+-- ATTACK BUTTONS (layout: Speed @0, Range @40, Light @80, InfJump @120)
+-------------------------------------------------
+
+local speedBtn=Instance.new("TextButton")
+speedBtn.Size=UDim2.new(0,200,0,35)
+speedBtn.Position=UDim2.new(0,0,0,0)
+speedBtn.Text="Speed"
+speedBtn.Visible=false
+speedBtn.Parent=scroll
+
+local rangeBtn=Instance.new("TextButton")
+rangeBtn.Size=UDim2.new(0,200,0,35)
+rangeBtn.Position=UDim2.new(0,0,0,40)
+rangeBtn.Text="Range"
+rangeBtn.Visible=false
+rangeBtn.Parent=scroll
+
+local lightBtn = Instance.new("TextButton")
+lightBtn.Size = UDim2.new(0,200,0,35)
+lightBtn.Position = UDim2.new(0,0,0,80)
+lightBtn.Text = "Light OFF"
+lightBtn.Visible = false
+lightBtn.Parent = scroll
+
+local infJumpBtn = Instance.new("TextButton")
+infJumpBtn.Size = UDim2.new(0,200,0,35)
+infJumpBtn.Position = UDim2.new(0,0,0,120)
+infJumpBtn.Text = "Inf Jump OFF"
+infJumpBtn.Visible = false
+infJumpBtn.Parent = scroll
+
+-- Speed choices (1x..4x) placed directly under Speed button (overlay)
+local sp1 = Instance.new("TextButton")
+sp1.Size = UDim2.new(0,200,0,30)
+sp1.Position = UDim2.new(0,0,0,35)
+sp1.Text = "1x"
+sp1.Visible = false
+sp1.Parent = scroll
+
+local sp2 = sp1:Clone()
+sp2.Position = UDim2.new(0,0,0,65)
+sp2.Text = "2x"
+sp2.Parent = scroll
+
+local sp3 = sp1:Clone()
+sp3.Position = UDim2.new(0,0,0,95)
+sp3.Text = "3x"
+sp3.Parent = scroll
+
+local sp4 = sp1:Clone()
+sp4.Position = UDim2.new(0,0,0,125)
+sp4.Text = "4x"
+sp4.Parent = scroll
+
+-- Range choices (1x..4x) placed directly under Range button
+local rg1 = sp1:Clone()
+rg1.Position = UDim2.new(0,0,0,75) -- under Range area (Range is at 40, so these start at 175 to avoid overlap; they overlay)
+rg1.Text = "1x"
+rg1.Visible = false
+rg1.Parent = scroll
+
+local rg2 = rg1:Clone()
+rg2.Position = UDim2.new(0,0,0,105)
+rg2.Text = "2x"
+rg2.Parent = scroll
+
+local rg3 = rg1:Clone()
+rg3.Position = UDim2.new(0,0,0,135)
+rg3.Text = "3x"
+rg3.Parent = scroll
+
+local rg4 = rg1:Clone()
+rg4.Position = UDim2.new(0,0,0,165)
+rg4.Text = "4x"
+rg4.Parent = scroll
+
+-------------------------------------------------
+-- Helpers for original sizes
+-------------------------------------------------
+
+local function recordOriginalHandle(tool)
+	if not tool or not tool:IsA("Tool") then return end
+	local handle = tool:FindFirstChild("Handle")
+	if handle and originalHandleSizes[tool] == nil then
+		originalHandleSizes[tool] = handle.Size
+	end
+end
+
+local function applyRangeMult(mult)
+	-- store originals then apply exact sizes (not cumulative)
+	for _,tool in pairs(player.Backpack:GetChildren()) do
+		recordOriginalHandle(tool)
+		local handle = tool:FindFirstChild("Handle")
+		if handle then
+			local orig = originalHandleSizes[tool] or handle.Size
+			handle.Size = orig * mult
+		end
+	end
+
+	for _,tool in pairs(player.Character and player.Character:GetChildren() or {}) do
+		if tool:IsA("Tool") then
+			recordOriginalHandle(tool)
+			local handle = tool:FindFirstChild("Handle")
+			if handle then
+				local orig = originalHandleSizes[tool] or handle.Size
+				handle.Size = orig * mult
+			end
+		end
+	end
+end
+
+-------------------------------------------------
 -- PAGE SWITCH
 -------------------------------------------------
+
+local function hideAllAttackExtras()
+	sp1.Visible=false; sp2.Visible=false; sp3.Visible=false; sp4.Visible=false
+	rg1.Visible=false; rg2.Visible=false; rg3.Visible=false; rg4.Visible=false
+end
 
 local function showHome()
 
@@ -418,6 +568,10 @@ local function showHome()
 	rifleBtn.Visible=false
 	foodBtn.Visible=false
 
+	speedBtn.Visible=false
+	rangeBtn.Visible=false
+
+	hideAllAttackExtras()
 end
 
 local function showBring()
@@ -434,10 +588,154 @@ local function showBring()
 	rifleBtn.Visible=true
 	foodBtn.Visible=true
 
+	speedBtn.Visible=false
+	rangeBtn.Visible=false
+
+	hideAllAttackExtras()
+end
+
+local function showAttack()
+
+	playerBtn.Visible=false
+	animalBtn.Visible=false
+	chestBtn.Visible=false
+
+	logBtn.Visible=false
+	metalBtn.Visible=false
+	fuelBtn.Visible=false
+	healBtn.Visible=false
+	ammoBtn.Visible=false
+	rifleBtn.Visible=false
+	foodBtn.Visible=false
+
+	speedBtn.Visible=true
+	rangeBtn.Visible=true
+	lightBtn.Visible=true
+	infJumpBtn.Visible=true
+
+	hideAllAttackExtras()
 end
 
 homeBtn.MouseButton1Click:Connect(showHome)
 bringBtn.MouseButton1Click:Connect(showBring)
+attackBtn.MouseButton1Click:Connect(showAttack)
+
+-------------------------------------------------
+-- SPEED
+-------------------------------------------------
+
+speedBtn.MouseButton1Click:Connect(function()
+	-- show speed choices directly under Speed button
+	sp1.Visible=true; sp2.Visible=true; sp3.Visible=true; sp4.Visible=true
+
+	-- hide range choices & other popups
+	rg1.Visible=false; rg2.Visible=false; rg3.Visible=false; rg4.Visible=false
+end)
+
+local function setSpeed(mult)
+	local hum=player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if hum then
+		-- set to exact multiple of originalWalkSpeed
+		hum.WalkSpeed = (originalWalkSpeed or 16) * (mult or 1)
+	end
+	-- hide popup after pick
+	sp1.Visible=false; sp2.Visible=false; sp3.Visible=false; sp4.Visible=false
+end
+
+sp1.MouseButton1Click:Connect(function() setSpeed(1) end)
+sp2.MouseButton1Click:Connect(function() setSpeed(2) end)
+sp3.MouseButton1Click:Connect(function() setSpeed(3) end)
+sp4.MouseButton1Click:Connect(function() setSpeed(4) end)
+
+-- keep originalWalkSpeed in sync if player's character spawns
+local function cacheOriginalWalkSpeed()
+	local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if hum and hum.WalkSpeed then
+		originalWalkSpeed = hum.WalkSpeed
+	else
+		originalWalkSpeed = 16
+	end
+end
+
+player.CharacterAdded:Connect(function()
+	task.wait(0.1)
+	cacheOriginalWalkSpeed()
+end)
+cacheOriginalWalkSpeed()
+
+-------------------------------------------------
+-- RANGE
+-------------------------------------------------
+
+rangeBtn.MouseButton1Click:Connect(function()
+	-- show range choices directly under Range button
+	rg1.Visible=true; rg2.Visible=true; rg3.Visible=true; rg4.Visible=true
+
+	-- hide speed choices
+	sp1.Visible=false; sp2.Visible=false; sp3.Visible=false; sp4.Visible=false
+end)
+
+rg1.MouseButton1Click:Connect(function()
+	applyRangeMult(1)
+	-- hide popup
+	rg1.Visible=false; rg2.Visible=false; rg3.Visible=false; rg4.Visible=false
+end)
+rg2.MouseButton1Click:Connect(function()
+	applyRangeMult(2)
+	rg1.Visible=false; rg2.Visible=false; rg3.Visible=false; rg4.Visible=false
+end)
+rg3.MouseButton1Click:Connect(function()
+	applyRangeMult(3)
+	rg1.Visible=false; rg2.Visible=false; rg3.Visible=false; rg4.Visible=false
+end)
+rg4.MouseButton1Click:Connect(function()
+	applyRangeMult(4)
+	rg1.Visible=false; rg2.Visible=false; rg3.Visible=false; rg4.Visible=false
+end)
+
+-------------------------------------------------
+-- LIGHT (new)
+-------------------------------------------------
+
+local prevAmbient = Lighting.Ambient
+local prevOutdoor = Lighting.OutdoorAmbient
+local prevBrightness = Lighting.Brightness
+
+lightBtn.MouseButton1Click:Connect(function()
+	lightOn = not lightOn
+	lightBtn.Text = "Light "..(lightOn and "ON" or "OFF")
+
+	if lightOn then
+		Lighting.Ambient = Color3.fromRGB(220,220,220)
+		Lighting.OutdoorAmbient = Color3.fromRGB(200,200,200)
+		Lighting.Brightness = math.max(prevBrightness or 0, 2)
+	else
+		if prevAmbient then Lighting.Ambient = prevAmbient end
+		if prevOutdoor then Lighting.OutdoorAmbient = prevOutdoor end
+		if prevBrightness then Lighting.Brightness = prevBrightness end
+	end
+end)
+
+-------------------------------------------------
+-- INFINITE JUMP (new)
+-------------------------------------------------
+
+infJumpBtn.MouseButton1Click:Connect(function()
+	infJumpEnabled = not infJumpEnabled
+	infJumpBtn.Text = "Inf Jump "..(infJumpEnabled and "ON" or "OFF")
+end)
+
+UIS.JumpRequest:Connect(function()
+	if infJumpEnabled and player.Character then
+		local hum = player.Character:FindFirstChildOfClass("Humanoid")
+		local root = player.Character:FindFirstChild("HumanoidRootPart")
+		if hum and root then
+			hum:ChangeState(Enum.HumanoidStateType.Jumping)
+			-- upward boost to allow stacking; tune this value if needed
+			root.Velocity = Vector3.new(root.Velocity.X, 120, root.Velocity.Z)
+		end
+	end
+end)
 
 -------------------------------------------------
 -- BUTTON ACTIONS
@@ -470,7 +768,7 @@ rifleBtn.MouseButton1Click:Connect(bringWeapons)
 foodBtn.MouseButton1Click:Connect(bringFood)
 
 -------------------------------------------------
--- AUTO UPDATE (FIXED)
+-- AUTO UPDATE
 -------------------------------------------------
 
 task.spawn(function()
